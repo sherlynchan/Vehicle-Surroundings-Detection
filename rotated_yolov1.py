@@ -207,7 +207,7 @@ class Loss_yolov1(nn.Module):
         for i in range(n):  # batchsize循环
             for m in range(7):  # x方向网格循环
                 for n in range(7):  # y方向网格循环
-                    if labels[i,4,m,n]==1:# 如果包含物体
+                    if labels[i,5,m,n]==1:# 如果包含物体
                         # 将数据(px,py,w,h)转换为(x1,y1,x2,y2)
                         # 先将px,py转换为cx,cy，即相对网格的位置转换为标准化后实际的bbox中心位置cx,xy
                         # 然后再利用(cx-w/2,cy-h/2,cx+w/2,cy+h/2)转换为xyxy形式，用于计算iou
@@ -222,15 +222,15 @@ class Loss_yolov1(nn.Module):
                         # 选择iou大的bbox作为负责物体
                         if iou1 >= iou2:
                             coor_loss = coor_loss + 5 * (torch.sum((pred[i,0:2,m,n] - labels[i,0:2,m,n])**2) \
-                                        + torch.sum((pred[i,2:4,m,n].sqrt()-labels[i,2:4,m,n].sqrt())**2))
-                                        ##+ (pred[i,4,m,n]-labels[i,4,m,n])**2
+                                        + torch.sum((pred[i,2:4,m,n].sqrt()-labels[i,2:4,m,n].sqrt())**2)) \
+                                        + (pred[i,4,m,n]-labels[i,4,m,n])**2
                             obj_confi_loss = obj_confi_loss + (pred[i,5,m,n] - iou1)**2
                             # iou比较小的bbox不负责预测物体，因此confidence loss算在noobj中，注意，对于标签的置信度应该是iou2
                             noobj_confi_loss = noobj_confi_loss + 0.5 * ((pred[i,11,m,n]-iou2)**2)
                         else:
                             coor_loss = coor_loss + 5 * (torch.sum((pred[i,6:8,m,n] - labels[i,6:8,m,n])**2) \
-                                        + torch.sum((pred[i,8:10,m,n].sqrt()-labels[i,8:10,m,n].sqrt())**2))
-                                        ##+ (pred[i,10,m,n]-labels[i,10,m,n])**2
+                                        + torch.sum((pred[i,8:10,m,n].sqrt()-labels[i,8:10,m,n].sqrt())**2)) \
+                                        + (pred[i,10,m,n]-labels[i,10,m,n])**2
                             obj_confi_loss = obj_confi_loss + (pred[i,11,m,n] - iou2)**2
                             # iou比较小的bbox不负责预测物体，因此confidence loss算在noobj中,注意，对于标签的置信度应该是iou1
                             noobj_confi_loss = noobj_confi_loss + 0.5 * ((pred[i, 5, m, n]-iou1) ** 2)
