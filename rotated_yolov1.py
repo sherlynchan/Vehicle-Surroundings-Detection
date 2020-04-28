@@ -22,105 +22,105 @@ import torch.nn as nn
 import torch
 
 
-def labels2bbox(matrix):
-    """
-    将网络输出的7*7*30的数据转换为bbox的(98,25)的格式，然后再将NMS处理后的结果返回
-    :param matrix: 注意，输入的数据中，bbox坐标的格式是(px,py,w,h)，需要转换为(x1,y1,x2,y2)的格式再输入NMS
-    :return: 返回NMS处理后的结果
-    """
-    if matrix.size()[0:2] != (7, 7):
-        raise ValueError("Error: Wrong labels size:", matrix.size())
-    bbox = torch.zeros((98, 15))
-    # 先把7*7*30的数据转变为bbox的(98,25)的格式，其中，bbox信息格式从(px,py,w,h)转换为(x1,y1,x2,y2),方便计算iou
-    for i in range(7):  # i是网格的行方向(y方向)
-        for j in range(7):  # j是网格的列方向(x方向)
-            bbox[2 * (i * 7 + j), 0:4] = torch.Tensor([(matrix[i, j, 0] + j) / 7 - matrix[i, j, 2] / 2,
-                                                       (matrix[i, j, 1] + i) / 7 - matrix[i, j, 3] / 2,
-                                                       (matrix[i, j, 0] + j) / 7 + matrix[i, j, 2] / 2,
-                                                       (matrix[i, j, 1] + i) / 7 + matrix[i, j, 3] / 2])
-            bbox[2 * (i * 7 + j), 4] = matrix[i, j, 4]
-            bbox[2 * (i * 7 + j), 5] = matrix[i, j, 5]
-            bbox[2 * (i * 7 + j), 6:] = matrix[i, j, 12:]
-
-            bbox[2 * (i * 7 + j) + 1, 0:4] = torch.Tensor([(matrix[i, j, 6] + j) / 7 - matrix[i, j, 8] / 2,
-                                                           (matrix[i, j, 7] + i) / 7 - matrix[i, j, 9] / 2,
-                                                           (matrix[i, j, 6] + j) / 7 + matrix[i, j, 8] / 2,
-                                                           (matrix[i, j, 7] + i) / 7 + matrix[i, j, 9] / 2])
-            bbox[2 * (i * 7 + j) + 1, 4] = matrix[i, j, 10]
-            bbox[2 * (i * 7 + j) + 1, 5] = matrix[i, j, 11]
-            bbox[2 * (i * 7 + j) + 1, 6:] = matrix[i, j, 12:]
-    return NMS(bbox)  # 对所有98个bbox执行NMS算法，清理cls-specific confidence score较低以及iou重合度过高的bbox
-
-
-def NMS(bbox, conf_thresh=0.03, iou_thresh=0.1):
-    """bbox数据格式是(n,25),前4个是(x1,y1,x2,y2)的坐标信息，第5个是置信度，后20个是类别概率
-    :param conf_thresh: cls-specific confidence score的阈值
-    :param iou_thresh: NMS算法中iou的阈值
-    """
-    n = bbox.size()[0]
-    bbox_prob = bbox[:, 6:].clone()  # 类别预测的条件概率
-    bbox_confi = bbox[:, 5].clone().unsqueeze(1).expand_as(bbox_prob)  # 预测置信度
-    bbox_cls_spec_conf = bbox_confi * bbox_prob  # 置信度*类别条件概率=cls-specific confidence score整合了是否有物体及是什么物体的两种信息
-    bbox_cls_spec_conf[bbox_cls_spec_conf <= conf_thresh] = 0  # 将低于阈值的bbox忽略
-    for c in range(9):
-        rank = torch.sort(bbox_cls_spec_conf[:, c], descending=True).indices
-        for i in range(98):
-            if bbox_cls_spec_conf[rank[i], c] != 0:
-                for j in range(i + 1, 98):
-                    if bbox_cls_spec_conf[rank[j], c] != 0:
-                        iou = calculate_iou(bbox[rank[i], 0:4], bbox[rank[j], 0:4])
-                        if iou > iou_thresh:  # 根据iou进行非极大值抑制抑制
-                            bbox_cls_spec_conf[rank[j], c] = 0
-    bbox = bbox[torch.max(bbox_cls_spec_conf, dim=1).values > 0]  # 将20个类别中最大的cls-specific confidence score为0的bbox都排除
-    bbox_cls_spec_conf = bbox_cls_spec_conf[torch.max(bbox_cls_spec_conf, dim=1).values > 0]
-    res = torch.ones((bbox.size()[0], 6))
-    res[:, 1:6] = bbox[:, 0:5]  # 储存最后的bbox坐标信息
-    res[:, 0] = torch.argmax(bbox[:, 6:], dim=1).int()  # 储存bbox对应的类别信息
-    res[:, 6] = torch.max(bbox_cls_spec_conf, dim=1).values  # 储存bbox对应的class-specific confidence scores
-    return res
-
-
-def draw_box(ax, corners, color):
-    point_squence = torch.stack([corners[:, 0], corners[:, 1], corners[:, 3], corners[:, 2], corners[:, 0]])
-
-    # the corners are in meter and time 10 will convert them in pixels
-    # Add 400, since the center of the image is at pixel (400, 400)
-    # The negative sign is because the y axis is reversed for matplotlib
-    ax.plot(point_squence.T[0] * 10 + 400, -point_squence.T[1] * 10 + 400, color=color)
-
-
-# res = labels2bbox(pred[0])
-pred0 = pred[0].permute((1, 2, 0))
-res = labels2bbox(pred0)
-bbox = []
-cls = []
-
-# x1 = 800*bbox[i,1]
-# y1 = 800*bbox[i,2]
-# x2 = 800*bbox[i,3]
-# y2 = 800*bbox[i,4]
-# point_squence = torch.tensor([[x1,y1],[x2, y1],[x2,y2], [x1,y2], [x1,y1]])
-
-for i in res:
-    tmp = []
-    tmp.append([i[1], i[2]])
-    tmp.append([i[3], i[2]])
-    tmp.append([i[1], i[4]])
-    tmp.append([i[3], i[4]])
-    #     tmp.append([i[2],i[1]])
-    #     tmp.append([i[2],i[3]])
-    #     tmp.append([i[4],i[1]])
-    #     tmp.append([i[4],i[3]])
-    bbox.append(list(np.array(tmp).T))
-    cls.append(i[0])
-
-fig, ax = plt.subplots()
-color_list = ['b', 'g', 'orange', 'c', 'm', 'y', 'k', 'w', 'r']
-ax.imshow(road_image[0], cmap='binary');
-# The ego car position
-ax.plot(400, 400, 'x', color="red")
-for i, bb in enumerate(np.array(bbox)):
-    draw_box(ax, torch.Tensor(bb * 80 - 40), color=color_list[int(cls[i])])
+# def labels2bbox(matrix):
+#     """
+#     将网络输出的7*7*30的数据转换为bbox的(98,25)的格式，然后再将NMS处理后的结果返回
+#     :param matrix: 注意，输入的数据中，bbox坐标的格式是(px,py,w,h)，需要转换为(x1,y1,x2,y2)的格式再输入NMS
+#     :return: 返回NMS处理后的结果
+#     """
+#     if matrix.size()[0:2] != (7, 7):
+#         raise ValueError("Error: Wrong labels size:", matrix.size())
+#     bbox = torch.zeros((98, 15))
+#     # 先把7*7*30的数据转变为bbox的(98,25)的格式，其中，bbox信息格式从(px,py,w,h)转换为(x1,y1,x2,y2),方便计算iou
+#     for i in range(7):  # i是网格的行方向(y方向)
+#         for j in range(7):  # j是网格的列方向(x方向)
+#             bbox[2 * (i * 7 + j), 0:4] = torch.Tensor([(matrix[i, j, 0] + j) / 7 - matrix[i, j, 2] / 2,
+#                                                        (matrix[i, j, 1] + i) / 7 - matrix[i, j, 3] / 2,
+#                                                        (matrix[i, j, 0] + j) / 7 + matrix[i, j, 2] / 2,
+#                                                        (matrix[i, j, 1] + i) / 7 + matrix[i, j, 3] / 2])
+#             bbox[2 * (i * 7 + j), 4] = matrix[i, j, 4]
+#             bbox[2 * (i * 7 + j), 5] = matrix[i, j, 5]
+#             bbox[2 * (i * 7 + j), 6:] = matrix[i, j, 12:]
+#
+#             bbox[2 * (i * 7 + j) + 1, 0:4] = torch.Tensor([(matrix[i, j, 6] + j) / 7 - matrix[i, j, 8] / 2,
+#                                                            (matrix[i, j, 7] + i) / 7 - matrix[i, j, 9] / 2,
+#                                                            (matrix[i, j, 6] + j) / 7 + matrix[i, j, 8] / 2,
+#                                                            (matrix[i, j, 7] + i) / 7 + matrix[i, j, 9] / 2])
+#             bbox[2 * (i * 7 + j) + 1, 4] = matrix[i, j, 10]
+#             bbox[2 * (i * 7 + j) + 1, 5] = matrix[i, j, 11]
+#             bbox[2 * (i * 7 + j) + 1, 6:] = matrix[i, j, 12:]
+#     return NMS(bbox)  # 对所有98个bbox执行NMS算法，清理cls-specific confidence score较低以及iou重合度过高的bbox
+#
+#
+# def NMS(bbox, conf_thresh=0.03, iou_thresh=0.1):
+#     """bbox数据格式是(n,25),前4个是(x1,y1,x2,y2)的坐标信息，第5个是置信度，后20个是类别概率
+#     :param conf_thresh: cls-specific confidence score的阈值
+#     :param iou_thresh: NMS算法中iou的阈值
+#     """
+#     n = bbox.size()[0]
+#     bbox_prob = bbox[:, 6:].clone()  # 类别预测的条件概率
+#     bbox_confi = bbox[:, 5].clone().unsqueeze(1).expand_as(bbox_prob)  # 预测置信度
+#     bbox_cls_spec_conf = bbox_confi * bbox_prob  # 置信度*类别条件概率=cls-specific confidence score整合了是否有物体及是什么物体的两种信息
+#     bbox_cls_spec_conf[bbox_cls_spec_conf <= conf_thresh] = 0  # 将低于阈值的bbox忽略
+#     for c in range(9):
+#         rank = torch.sort(bbox_cls_spec_conf[:, c], descending=True).indices
+#         for i in range(98):
+#             if bbox_cls_spec_conf[rank[i], c] != 0:
+#                 for j in range(i + 1, 98):
+#                     if bbox_cls_spec_conf[rank[j], c] != 0:
+#                         iou = calculate_iou(bbox[rank[i], 0:4], bbox[rank[j], 0:4])
+#                         if iou > iou_thresh:  # 根据iou进行非极大值抑制抑制
+#                             bbox_cls_spec_conf[rank[j], c] = 0
+#     bbox = bbox[torch.max(bbox_cls_spec_conf, dim=1).values > 0]  # 将20个类别中最大的cls-specific confidence score为0的bbox都排除
+#     bbox_cls_spec_conf = bbox_cls_spec_conf[torch.max(bbox_cls_spec_conf, dim=1).values > 0]
+#     res = torch.ones((bbox.size()[0], 6))
+#     res[:, 1:6] = bbox[:, 0:5]  # 储存最后的bbox坐标信息
+#     res[:, 0] = torch.argmax(bbox[:, 6:], dim=1).int()  # 储存bbox对应的类别信息
+#     res[:, 6] = torch.max(bbox_cls_spec_conf, dim=1).values  # 储存bbox对应的class-specific confidence scores
+#     return res
+#
+#
+# def draw_box(ax, corners, color):
+#     point_squence = torch.stack([corners[:, 0], corners[:, 1], corners[:, 3], corners[:, 2], corners[:, 0]])
+#
+#     # the corners are in meter and time 10 will convert them in pixels
+#     # Add 400, since the center of the image is at pixel (400, 400)
+#     # The negative sign is because the y axis is reversed for matplotlib
+#     ax.plot(point_squence.T[0] * 10 + 400, -point_squence.T[1] * 10 + 400, color=color)
+#
+#
+# # res = labels2bbox(pred[0])
+# pred0 = pred[0].permute((1, 2, 0))
+# res = labels2bbox(pred0)
+# bbox = []
+# cls = []
+#
+# # x1 = 800*bbox[i,1]
+# # y1 = 800*bbox[i,2]
+# # x2 = 800*bbox[i,3]
+# # y2 = 800*bbox[i,4]
+# # point_squence = torch.tensor([[x1,y1],[x2, y1],[x2,y2], [x1,y2], [x1,y1]])
+#
+# for i in res:
+#     tmp = []
+#     tmp.append([i[1], i[2]])
+#     tmp.append([i[3], i[2]])
+#     tmp.append([i[1], i[4]])
+#     tmp.append([i[3], i[4]])
+#     #     tmp.append([i[2],i[1]])
+#     #     tmp.append([i[2],i[3]])
+#     #     tmp.append([i[4],i[1]])
+#     #     tmp.append([i[4],i[3]])
+#     bbox.append(list(np.array(tmp).T))
+#     cls.append(i[0])
+#
+# fig, ax = plt.subplots()
+# color_list = ['b', 'g', 'orange', 'c', 'm', 'y', 'k', 'w', 'r']
+# ax.imshow(road_image[0], cmap='binary');
+# # The ego car position
+# ax.plot(400, 400, 'x', color="red")
+# for i, bb in enumerate(np.array(bbox)):
+#     draw_box(ax, torch.Tensor(bb * 80 - 40), color=color_list[int(cls[i])])
 
 # def convert(size, box):
 #     """将bbox的左上角点、右下角点坐标的格式，转换为bbox中心点+bbox的w,h的格式
