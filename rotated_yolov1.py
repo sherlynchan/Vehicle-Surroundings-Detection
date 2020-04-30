@@ -9,6 +9,10 @@ import matplotlib.pyplot as plt
 matplotlib.rcParams['figure.figsize'] = [5, 5]
 matplotlib.rcParams['figure.dpi'] = 200
 
+import shapely
+from shapely.geometry import Polygon, MultiPoint  # 多边形
+
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -217,8 +221,8 @@ class Loss_yolov1(nn.Module):
                                            (pred[i,6,m,n]+m)/num_gridx + pred[i,8,m,n]/2,(pred[i,7,m,n]+n)/num_gridy + pred[i,9,m,n]/2)
                         bbox_gt_xyxy = ((labels[i,0,m,n]+m)/num_gridx - labels[i,2,m,n]/2,(labels[i,1,m,n]+n)/num_gridy - labels[i,3,m,n]/2,
                                         (labels[i,0,m,n]+m)/num_gridx + labels[i,2,m,n]/2,(labels[i,1,m,n]+n)/num_gridy + labels[i,3,m,n]/2)
-                        iou1 = calculate_iou(bbox1_pred_xyxy,bbox_gt_xyxy)
-                        iou2 = calculate_iou(bbox2_pred_xyxy,bbox_gt_xyxy)
+                        iou1 = skewiou(bbox1_pred_xyxy,bbox_gt_xyxy, pred[i,4,m,n],labels[i,4,m,n])
+                        iou2 = skewiou(bbox2_pred_xyxy,bbox_gt_xyxy, pred[i,10,m,n], labels[i,4,m,n])
                         # 选择iou大的bbox作为负责物体
                         if iou1 >= iou2:
                             coor_loss = coor_loss + 5 * (torch.sum((pred[i,0:2,m,n] - labels[i,0:2,m,n])**2) \
@@ -264,6 +268,50 @@ def calculate_iou(bbox1,bbox2):
         return area_intersect / (area1 + area2 - area_intersect)  # 计算iou
     else:
         return 0
+
+def skewiou(box1, box2, theta1, theta2):
+    box1 = np.asarray(box1)
+    box2 = np.asarray(box2)
+    box1 = rotate_box(box1, theta1, (box1[0]+box1[2])/2, (box1[1]+box1[3])/2)
+    box2 = rotate_box(box2, theta2, (box2[0]+box2[2])/2, (box2[1]+box2[3])/2)
+    #[x1, y1, x2, y2, x3, y3, x4, y4]
+    a = np.array(box1).reshape(4, 2)
+    b = np.array(box2).reshape(4, 2)
+    # 所有点的最小凸的表示形式，四边形对象，会自动计算四个点，最后顺序为：左上 左下  右下 右上 左上
+    poly1 = Polygon(a).convex_hull
+    poly2 = Polygon(b).convex_hull
+
+    # 异常情况排除
+    if not poly1.is_valid or not poly2.is_valid:
+        print('formatting errors for boxes!!!! ')
+        return 0
+    if poly1.area == 0 or poly2.area == 0:
+        return 0
+
+    inter = Polygon(poly1).intersection(Polygon(poly2)).area
+    union = poly1.area + poly2.area - inter
+
+    if union == 0:
+        return 0
+    else:
+        return inter / union
+
+
+def rotate_box(corners, angle, cx, cy):
+    # [x1, y1, x2, y2]
+    corners = np.array([[corners[0], corners[1]],
+                        [corners[2],corners[1]],
+                        [corners[2],corners[3]],
+                        [corners[0],corners[3]]])
+    corners = corners.reshape(-1, 2)
+    corners = np.hstack((corners, np.ones((corners.shape[0], 1), dtype=type(corners[0][0]))))
+
+    M = cv2.getRotationMatrix2D((cx, cy), angle, 1.0)
+
+    calculated = np.dot(M, corners.T).T
+    calculated = calculated.reshape(-1, 8)
+
+    return calculated
 
 
 class YOLOv1_resnet(nn.Module):
@@ -346,7 +394,7 @@ if __name__ == '__main__':
     labeled_scene_index_val = np.arange(126, 134)
 
     #epoch = 50
-    epoch = 1
+    epoch = 3
     batchsize = 2
     lr = 0.0001
     transform = torchvision.transforms.ToTensor()
