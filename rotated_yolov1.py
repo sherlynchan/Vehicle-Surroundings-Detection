@@ -11,7 +11,7 @@ matplotlib.rcParams['figure.dpi'] = 200
 
 import shapely
 from shapely.geometry import Polygon, MultiPoint  # 多边形
-
+import math
 
 import torch
 import torch.nn as nn
@@ -269,6 +269,38 @@ def calculate_iou(bbox1,bbox2):
     else:
         return 0
 
+# def get_rotated_coors(box):
+#     cx = box[0];
+#     cy = box[1];
+#     w = box[2];
+#     h = box[3];
+#     a = box[4]
+#     xmin = cx - w * 0.5;
+#     xmax = cx + w * 0.5;
+#     ymin = cy - h * 0.5;
+#     ymax = cy + h * 0.5
+#     t_x0 = xmin;
+#     t_y0 = ymin;
+#     t_x1 = xmin;
+#     t_y1 = ymax;
+#     t_x2 = xmax;
+#     t_y2 = ymax;
+#     t_x3 = xmax;
+#     t_y3 = ymin
+#     R = np.eye(3)
+#     R[:2] = cv2.getRotationMatrix2D(angle=-a * 180 / math.pi, center=(cx, cy), scale=1)
+#     x0 = t_x0 * R[0, 0] + t_y0 * R[0, 1] + R[0, 2]
+#     y0 = t_x0 * R[1, 0] + t_y0 * R[1, 1] + R[1, 2]
+#     x1 = t_x1 * R[0, 0] + t_y1 * R[0, 1] + R[0, 2]
+#     y1 = t_x1 * R[1, 0] + t_y1 * R[1, 1] + R[1, 2]
+#     x2 = t_x2 * R[0, 0] + t_y2 * R[0, 1] + R[0, 2]
+#     y2 = t_x2 * R[1, 0] + t_y2 * R[1, 1] + R[1, 2]
+#     x3 = t_x3 * R[0, 0] + t_y3 * R[0, 1] + R[0, 2]
+#     y3 = t_x3 * R[1, 0] + t_y3 * R[1, 1] + R[1, 2]
+#
+#     r_box = [x0, y0, x1, y1, x2, y2, x3, y3]
+#     return r_box
+
 def skewiou(box1, box2, theta1, theta2):
     box1 = np.asarray(box1)
     box2 = np.asarray(box2)
@@ -306,7 +338,7 @@ def rotate_box(corners, angle, cx, cy):
     corners = corners.reshape(-1, 2)
     corners = np.hstack((corners, np.ones((corners.shape[0], 1), dtype=type(corners[0][0]))))
 
-    M = cv2.getRotationMatrix2D((cx, cy), angle, 1.0)
+    M = cv2.getRotationMatrix2D((cx, cy), angle*180/np.pi, 1.0)
 
     calculated = np.dot(M, corners.T).T
     calculated = calculated.reshape(-1, 8)
@@ -394,9 +426,9 @@ if __name__ == '__main__':
     labeled_scene_index_val = np.arange(126, 134)
 
     #epoch = 50
-    epoch = 3
+    epoch = 1
     batchsize = 2
-    lr = 0.0001
+    lr = 0.00001
     transform = torchvision.transforms.ToTensor()
     labeled_trainset = LabeledDataset(image_folder=image_folder,
                                       annotation_file=annotation_csv,
@@ -418,8 +450,8 @@ if __name__ == '__main__':
     model = YOLOv1_resnet().to(device)
     criterion = Loss_yolov1()
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
-    torch.save(model.state_dict(), "models_pkl/rotated_YOLOv1_epoch_model" + str(0) + ".pkl")
-    torch.save(optimizer.state_dict(), "models_pkl/rotated_YOLOv1_epoch_optimizer" + str(0) + ".pkl")
+    torch.save(model.state_dict(), "models_pkl/rotated_YOLOv1_epoch_model_0430_" + str(0) + ".pkl")
+    torch.save(optimizer.state_dict(), "models_pkl/rotated_YOLOv1_epoch_optimizer_0430_" + str(0) + ".pkl")
     for ep in range(epoch):
         model.train()
         yl = torch.Tensor([0]).cuda()
@@ -446,8 +478,8 @@ if __name__ == '__main__':
             if it%500 == 0:
                 print("Epoch %d/%d| Step %d/%d| Loss: %.2f" % (ep, epoch, it, len(labeled_trainset) // batchsize, loss))
             yl = yl + loss
-        torch.save(model.state_dict(), "models_pkl/rotated_YOLOv1_epoch_model" + str(ep + 1) + ".pkl")
-        torch.save(optimizer.state_dict(), "models_pkl/rotated_YOLOv1_epoch_optimizer" + str(ep + 1) + ".pkl")
+        torch.save(model.state_dict(), "models_pkl/rotated_YOLOv1_epoch_model_0430_" + str(ep + 1) + ".pkl")
+        torch.save(optimizer.state_dict(), "models_pkl/rotated_YOLOv1_epoch_optimizer_0430_" + str(ep + 1) + ".pkl")
 
         model.eval()
         yt = torch.Tensor([0]).cuda()
