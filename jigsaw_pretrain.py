@@ -100,16 +100,16 @@ class jigsaw_classifier(nn.Module):
             nn.Linear(1024, 20))
 
     def forward(self, x):
-        x=self.encoder(x)
-        return F.log_softmax(self.hidden_layers(x))
+        x = self.encoder(x)
+        x = self.hidden_layers(x)
+        return x
+        #return F.log_softmax(x, dim=1)
 
 if __name__ == '__main__':
-    random.seed(0)
-    np.random.seed(0)
     torch.manual_seed(0)
     device = 'cuda'
     epoch = 2
-    batchsize = 2
+    batchsize = 1
     lr = 0.00001
     transform = torchvision.transforms.ToTensor()
 
@@ -152,16 +152,16 @@ if __name__ == '__main__':
             sample = sample.reshape(256, 256, batchsize, 6, 3).transpose(2, 3, 4, 0, 1)
             sample = torch.Tensor(sample).to(device)
             y_pred = model_ae(sample)
-            score, predicted = torch.max(y_pred, 1)
             label = label.to(device)
             loss = criterion_ae(y_pred, label)
+            score, predicted = torch.max(y_pred, 1)
             num_correct += (label == predicted).sum().item()
             optimizer_ae.zero_grad()
             loss.backward()
             optimizer_ae.step()
-            if it%500 == 0:
-                print("Epoch %d/%d| Step %d/%d| Loss: %.2f | Acc: %.2f " % (ep, epoch, it, len(unlabeled_trainset) // batchsize, loss, float(num_correct)/(len(un_trainloader)*batchsize)))
             yl = yl + loss
+            if it%500 == 0:
+                print("Epoch %d/%d| Step %d/%d| Loss: %.4f | Acc: %.2f " % (ep, epoch, it, len(unlabeled_trainset) // batchsize, loss, float(num_correct)/(len(un_trainloader)*batchsize)))
         torch.save(model_ae.encoder.state_dict(), "models_pkl/encoder_bbox_segment_epoch" + str(ep + 1) + ".pkl")
         torch.save(optimizer_ae.state_dict(), "models_pkl/encoder_bbox_segment_optimizer_epoch" + str(ep + 1) + ".pkl")
 
@@ -177,7 +177,7 @@ if __name__ == '__main__':
                 output = model_ae(sample)
                 score, predicted = torch.max(output, 1)
                 label = label.to(device)
-                loss = criterion_ae(predicted, label)
+                loss = criterion_ae(output, label)
                 num_correct_val += (label == predicted).sum().item()
                 yt = yt + loss
             print("Epoch %d/%d|val loss: %.2f |acc: %.2f" % (ep, epoch, yt/(len(un_valloader)*batchsize), float(num_correct_val)/(len(un_valloader)*batchsize)))
