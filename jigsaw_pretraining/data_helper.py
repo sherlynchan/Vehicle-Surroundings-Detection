@@ -66,7 +66,7 @@ class JigsawDataset(torch.utils.data.Dataset):
                 image = Image.open(image_path)
                 images.append(self.transform(image))
             image_tensor = torch.stack(images)
-            label = np.random.randint(20)
+            label = np.random.randint(len(self.permutation_list))
             image_permutated = torch.stack([images[i] for i in self.permutation_list[label]])
             return image_tensor, image_permutated, label
 
