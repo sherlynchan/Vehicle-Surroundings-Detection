@@ -7,9 +7,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torchvision
-
+import models
 import detector
-import road_map
 import cv2
 import numpy as np
 from skimage.measure import label, regionprops
@@ -25,19 +24,19 @@ def get_transform_task2():
 class ModelLoader():
     # Fill the information for your team
     team_name = 'Onlooker'
-    round_number = 1
+    round_number = 3
     team_member = ['Shaoling Chen', 'Yunan Hu', 'Shizhan Gong']
-    contact_email = '@nyu.edu'
+    contact_email = 'sg5722@nyu.edu'
 
-    def __init__(self, model_file1='/scratch/sc6995/mujupyter/dl/DS-GA-1008-deep-learning/models_pkl/pretrained_bbox_segment_epoch15.pkl', model_file2='/home/sg5722/models_pkl/road_map_model_epoch8.pkl'):
+    def __init__(self, model_file1='bbox_segment_epoch15.pkl', model_file2='ResNetAE_0507_yhu.pkl'):
         # You should
         #       1. create the model object
         #       2. load your state_dict
         #       3. call cuda()
         # self.model = ...
         #
-        self.model_detector = detector.res_detector()
-        self.model_map = road_map.res_roadmap()
+        self.model_detector = detector.res_roadmap()
+        self.model_map = models.ResNetVAE()
         self.model_detector.cuda()
         self.model_map.cuda()
         self.model_detector.load_state_dict(torch.load(model_file1))
@@ -57,7 +56,10 @@ class ModelLoader():
             pred_bi = ((out > 0.5) + 0)
         bbox = []
         for i in range(batch_size):
-            props = regionprops(label(1 - pred_bi[i].reshape(800, 800).cpu()))
+            try:
+                props = regionprops(label(1 - pred_bi[i].reshape(800, 800).cpu()))
+            except:
+                props = regionprops(label(~pred_bi[i].reshape(800, 800).cpu()))
             single_bbox = []
             for prop in props:
                 x0, y0 = ((prop.bbox[1] - 400) / 10), (-(prop.bbox[0] - 400) / 10)
@@ -77,10 +79,6 @@ class ModelLoader():
     def get_binary_road_map(self, samples):
         # samples is a cuda tensor with size [batch_size, 6, 3, 256, 306]
         # You need to return a cuda tensor with size [batch_size, 800, 800]
-        samples = samples.cpu().numpy().transpose(3, 4, 0, 1, 2).reshape(256, 306, -1)
-        samples = cv2.resize(samples, (256, 256))
-        samples = samples.reshape(256, 256, -1, 6, 3).transpose(2, 3, 4, 0, 1)
-        samples = torch.Tensor(samples).cuda()
         with torch.no_grad():
             out = self.model_map(samples)
-        return out.view(-1,800,800) > 0.5
+        return out[0].view(-1,800,800) > 0.5
