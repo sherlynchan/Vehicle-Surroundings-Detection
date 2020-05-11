@@ -111,7 +111,7 @@ class Decoder(nn.Module):
 
 
 class Encoder(nn.Module):
-    def __init__(self, img_ht, img_wt, pretrained=True):
+    def __init__(self, img_ht, img_wt, pretrained=False):
         super(Encoder, self).__init__()
         resnet = tvmodel.resnet18(pretrained=pretrained)  # 调用torchvision里的resnet34预训练模型
         self.resnet_encoder = nn.Sequential(*list(resnet.children())[:-2])
