@@ -28,7 +28,7 @@ import random
 class res_encoder(nn.Module):
     def __init__(self):
         super(res_encoder, self).__init__()
-        resnet = tvmodel.resnet18(pretrained=True)
+        resnet = tvmodel.resnet18(pretrained=False)
         resnet_out_channel = resnet.fc.in_features
         self.resnet = nn.Sequential(*list(resnet.children())[:-2])
 
@@ -109,7 +109,7 @@ if __name__ == '__main__':
     torch.manual_seed(0)
     device = 'cuda'
     epoch = 2
-    batchsize = 1
+    batchsize = 2
     lr = 0.00001
     transform = torchvision.transforms.ToTensor()
 
@@ -162,8 +162,8 @@ if __name__ == '__main__':
             yl = yl + loss
             if it%500 == 0:
                 print("Epoch %d/%d| Step %d/%d| Loss: %.4f | Acc: %.2f " % (ep, epoch, it, len(unlabeled_trainset) // batchsize, loss, float(num_correct)/(len(un_trainloader)*batchsize)))
-        torch.save(model_ae.encoder.state_dict(), "models_pkl/encoder_bbox_segment_epoch" + str(ep + 1) + ".pkl")
-        torch.save(optimizer_ae.state_dict(), "models_pkl/encoder_bbox_segment_optimizer_epoch" + str(ep + 1) + ".pkl")
+        torch.save(model_ae.encoder.state_dict(), "models_pkl/20_resencoder_bbox_segment_epoch" + str(ep + 1) + ".pkl")
+        torch.save(optimizer_ae.state_dict(), "models_pkl/20_resencoder_bbox_segment_optimizer_epoch" + str(ep + 1) + ".pkl")
 
         model_ae.eval()
         yt = torch.Tensor([0]).cuda()
