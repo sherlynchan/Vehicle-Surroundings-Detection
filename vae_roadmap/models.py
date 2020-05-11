@@ -21,16 +21,17 @@ class ResNetVAE(nn.Module):
     def __init__(self):
         super(ResNetVAE, self).__init__()
 
-        resnet = tvmodel.resnet18(pretrained=True)
-        self.base_layers = nn.Sequential(*list(resnet.children())[:-2], nn.AdaptiveAvgPool2d(output_size=(8, 8)),)
-        # pt_path = 'models_pkl/SSL_0507_model.pkl'
-        # if os.path.isfile(pt_path):
-        #     pt_model = ResNetSSL()
-        #     pt_model.load_state_dict(torch.load(pt_path))
-        #     self.base_layers.load_state_dict(pt_model.base_layers.state_dict())
-        #     print('load weights from pretrained model')
+        resnet = tvmodel.resnet18(pretrained=False)
+        self.base_layers = nn.Sequential(*list(resnet.children())[:-2],)
+        pt_path = 'models_pkl/SSL_0507_model.pkl'
+        if os.path.isfile(pt_path):
+            pt_model = ResNetSSL()
+            pt_model.load_state_dict(torch.load(pt_path))
+            self.base_layers.load_state_dict(pt_model.base_layers.state_dict())
+            print('load weights from pretrained model')
 
         self.conv_layers = nn.Sequential(
+            nn.AdaptiveAvgPool2d(output_size=(8, 8)),
             nn.Conv2d(3072, 1024, 3, padding=1),
             nn.BatchNorm2d(1024),
             nn.LeakyReLU(),
@@ -41,6 +42,10 @@ class ResNetVAE(nn.Module):
             nn.BatchNorm2d(512),
             nn.LeakyReLU(),
         )
+        
+        if os.path.isfile(pt_path):
+            self.conv_layers.load_state_dict(pt_model.conv_layers.state_dict())
+            print('load conv weights from pretrained model')
 
         self.deconv_layers = nn.Sequential(
                 nn.ConvTranspose2d(64, 1024, kernel_size=4, stride=3), ## 8, 1024, 25, 25
