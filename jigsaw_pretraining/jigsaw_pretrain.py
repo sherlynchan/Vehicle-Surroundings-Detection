@@ -14,8 +14,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torchvision
 from data_helper import JigsawDataset
-from data_loader_single_map import LabeledDataset
-from helper import collate_fn, draw_box
 
 import torchvision.models as tvmodel
 import torch.nn as nn
@@ -113,8 +111,8 @@ if __name__ == '__main__':
     lr = 0.00001
     transform = torchvision.transforms.ToTensor()
 
-    image_folder = '../data'
-    annotation_csv = '../data/annotation.csv'
+    image_folder = '../../data'
+    annotation_csv = '../../data/annotation.csv'
 
     unlabeled_scene_index = np.arange(86)
     unlabeled_scene_index_val = np.arange(86, 106)
