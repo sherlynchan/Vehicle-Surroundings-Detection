@@ -25,7 +25,7 @@ import torch
 class res_roadmap(nn.Module):
     def __init__(self):
         super(res_roadmap, self).__init__()
-        resnet = tvmodel.resnet18(pretrained=True)
+        resnet = tvmodel.resnet18(pretrained=False)
         resnet_out_channel = resnet.fc.in_features
         self.resnet = nn.Sequential(*list(resnet.children())[:-2])
 
