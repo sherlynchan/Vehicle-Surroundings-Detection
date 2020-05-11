@@ -105,14 +105,14 @@ class Loss_yolov1(nn.Module):
                         if iou1 >= iou2:
                             coor_loss = coor_loss + 5 * (torch.sum((pred[i,0:2,m,n] - labels[i,0:2,m,n])**2) \
                                         + torch.sum((pred[i,2:4,m,n].sqrt()-labels[i,2:4,m,n].sqrt())**2)) \
-                                        + (pred[i,4,m,n]-labels[i,4,m,n])**2
+                                        + 5*(pred[i,4,m,n]-labels[i,4,m,n])**2
                             obj_confi_loss = obj_confi_loss + (pred[i,5,m,n] - iou1)**2
                             # iou比较小的bbox不负责预测物体，因此confidence loss算在noobj中，注意，对于标签的置信度应该是iou2
                             noobj_confi_loss = noobj_confi_loss + 0.5 * ((pred[i,11,m,n]-iou2)**2)
                         else:
                             coor_loss = coor_loss + 5 * (torch.sum((pred[i,6:8,m,n] - labels[i,6:8,m,n])**2) \
                                         + torch.sum((pred[i,8:10,m,n].sqrt()-labels[i,8:10,m,n].sqrt())**2)) \
-                                        + (pred[i,10,m,n]-labels[i,10,m,n])**2
+                                        + 5*(pred[i,10,m,n]-labels[i,10,m,n])**2
                             obj_confi_loss = obj_confi_loss + (pred[i,11,m,n] - iou2)**2
                             # iou比较小的bbox不负责预测物体，因此confidence loss算在noobj中,注意，对于标签的置信度应该是iou1
                             noobj_confi_loss = noobj_confi_loss + 0.5 * ((pred[i, 5, m, n]-iou1) ** 2)
@@ -264,8 +264,8 @@ if __name__ == '__main__':
     torch.manual_seed(0)
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-    image_folder = './data'
-    annotation_csv = './data/annotation.csv'
+    image_folder = '../data'
+    annotation_csv = '../data/annotation.csv'
 
     unlabeled_scene_index = np.arange(106)
     labeled_scene_index = np.arange(106, 126)
@@ -324,7 +324,7 @@ if __name__ == '__main__':
             if it%500 == 0:
                 print("Epoch %d/%d| Step %d/%d| Loss: %.2f" % (ep, epoch, it, len(labeled_trainset) // batchsize, loss))
             yl = yl + loss
-        torch.save(model.state_dict(), "models_pkl/rotated_YOLOv1_epoch_model_0501.pkl")
+        torch.save(model.state_dict(), "models_pkl/rotated_YOLOv1_epoch_model_0510.pkl")
 
         model.eval()
         yt = torch.Tensor([0]).to(device)
